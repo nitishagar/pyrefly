@@ -77,9 +77,6 @@ assert_type((), tuple[()])
 "#,
 );
 
-// Child3's conflict pair used to be `Iterable[int]` vs `Iterable[int | str]`; under the
-// variance-aware diamond check that is compatible (Iterable's parameter is covariant and
-// `int <: int | str`), so no error is expected anywhere in this test.
 testcase!(
     test_tuple_base,
     r#"
@@ -91,7 +88,7 @@ class Base4(tuple[str, int]): ...
 
 class Child1(Base1, Base2): ...
 class Child2(Base1, Base3): ...
-class Child3(Base3, Base4): ...
+class Child3(Base3, Base4): ...  # E: Class `Child3` has inconsistent type arguments for base class `Iterable`
 class Child4(Base2, Base3): ...
 "#,
 );

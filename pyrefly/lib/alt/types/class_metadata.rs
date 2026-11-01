@@ -1047,29 +1047,34 @@ impl Linearization {
                         .rev()
                         .collect::<Vec<_>>();
                     let mut check_conflicting_targs = |ctype: &ClassType| -> bool {
-                        if let Some(prev) = seen_ancestors.get(ctype.class_object())
-                            && !targs_consistent(prev, ctype)
-                        {
-                            let ctx = ClassDisplayContext::new(&[cls, ctype.class_object()]);
-                            // TODO: Extend this error message to say where in the class bases the mismatch comes from
-                            // we will need to wire additional information for this.
-                            errors
-                                .error_builder(
-                                    cls.range(),
-                                    ErrorKind::InvalidInheritance,
-                                    format!(
-                                        "Class `{}` has inconsistent type arguments for base class `{}`: `{}` and `{}`",
-                                        ctx.display(cls),
-                                        ctx.display(ctype.class_object()),
-                                        Type::ClassType(prev.clone()),
-                                        Type::ClassType(ctype.clone()),
-                                    ),
-                                )
-                                .emit();
-                            true
-                        } else {
-                            seen_ancestors.insert(ctype.class_object().dupe(), ctype.clone());
-                            false
+                        match seen_ancestors.get(ctype.class_object()) {
+                            // The first specialization seen in walk order is the one the
+                            // MRO keeps, so every later one is checked against it and the
+                            // recorded specialization never changes.
+                            Some(prev) if !targs_consistent(prev, ctype) => {
+                                let ctx = ClassDisplayContext::new(&[cls, ctype.class_object()]);
+                                // TODO: Extend this error message to say where in the class bases the mismatch comes from
+                                // we will need to wire additional information for this.
+                                errors
+                                    .error_builder(
+                                        cls.range(),
+                                        ErrorKind::InvalidInheritance,
+                                        format!(
+                                            "Class `{}` has inconsistent type arguments for base class `{}`: `{}` and `{}`",
+                                            ctx.display(cls),
+                                            ctx.display(ctype.class_object()),
+                                            Type::ClassType(prev.clone()),
+                                            Type::ClassType(ctype.clone()),
+                                        ),
+                                    )
+                                    .emit();
+                                true
+                            }
+                            Some(_) => false,
+                            None => {
+                                seen_ancestors.insert(ctype.class_object().dupe(), ctype.clone());
+                                false
+                            }
                         }
                     };
 
