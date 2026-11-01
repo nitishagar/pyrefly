@@ -1781,13 +1781,11 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
                 Some(reason) => {
                     Attribute::class_attribute(ClassAttribute::read_only(combined, reason))
                 }
-                None => {
-                    Attribute::class_attribute(ClassAttribute::ReadWrite(
-                        combined,
-                        is_method,
-                        is_instance_var,
-                    ))
-                }
+                None => Attribute::class_attribute(ClassAttribute::ReadWrite(
+                    combined,
+                    is_method,
+                    is_instance_var,
+                )),
             }
         } else {
             Attribute::simple(combined)

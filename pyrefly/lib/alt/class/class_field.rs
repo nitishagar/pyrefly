@@ -3982,8 +3982,9 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
                 // Attributes created by assigning through `cls` in a method are set
                 // on the class itself, so they are class attributes, not instance
                 // variables declared by the class body.
-                let is_instance_var =
-                    annotation.is_some() && !is_classvar && initialization != ClassFieldInitialization::ClassMethod;
+                let is_instance_var = annotation.is_some()
+                    && !is_classvar
+                    && initialization != ClassFieldInitialization::ClassMethod;
                 if ambiguous && !matches!(cls, ClassBase::SelfType(_)) {
                     ClassAttribute::no_access(NoAccessReason::ClassAttributeIsGeneric(
                         cls.class_object().dupe(),
@@ -6091,7 +6092,10 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
                     })
                 })
             }
-            (ClassAttribute::ReadWrite(got, ..), ClassAttribute::Property(want, want_setter, _)) => {
+            (
+                ClassAttribute::ReadWrite(got, ..),
+                ClassAttribute::Property(want, want_setter, _),
+            ) => {
                 is_subset(
                     // Synthesize a getter method
                     &self.heap.mk_callable_ellipsis(got.clone()),

@@ -4742,3 +4742,70 @@ class C:
 C.instance_var = 3
     "#,
 );
+
+// Writes through a class object that resolve via the metaclass are metaclass-
+// instance writes and are never flagged: a class is an instance of its
+// metaclass, so assigning metaclass-declared fields (including `__name__`)
+// through the class object is valid.
+testcase!(
+    test_instance_var_assign_metaclass_writes_not_flagged,
+    TestEnv::new().enable_instance_var_assign_error(),
+    r#"
+class Meta(type):
+    meta_field: int
+
+class UsesMeta(metaclass=Meta):
+    instance_var: int
+
+UsesMeta.meta_field = 1
+UsesMeta.__name__ = "Renamed"
+
+# A plain class reads `__name__` from `type` through the metaclass fallback.
+class Plain:
+    instance_var: int
+
+Plain.__name__ = "Renamed"
+
+# Inherited metaclass fields stay metaclass-instance writes.
+class SubUsesMeta(UsesMeta):
+    pass
+
+SubUsesMeta.meta_field = 2
+    "#,
+);
+
+// Attributes created by assigning through `cls` in a classmethod are set on the
+// class itself, so they are class attributes, not class-body instance variables.
+testcase!(
+    test_instance_var_assign_classmethod_created_attr_not_flagged,
+    TestEnv::new().enable_instance_var_assign_error(),
+    r#"
+class C:
+    @classmethod
+    def make(cls) -> None:
+        cls.extra: int = 0
+
+C.extra = 1
+    "#,
+);
+
+// Class-body instance variables whose annotation is a union containing
+// descriptors keep their provenance through the descriptor-read conversion, so
+// writes via the class are still flagged.
+testcase!(
+    test_instance_var_assign_descriptor_union_flagged,
+    TestEnv::new().enable_instance_var_assign_error(),
+    r#"
+class Desc:
+    def __get__(self, instance: object, owner: type) -> int:
+        return 0
+    def __set__(self, instance: object, value: int) -> None:
+        pass
+
+class C:
+    x: "int | Desc"
+
+C.x = 1  # E: Cannot set instance variable `x` from the class
+C().x = 2
+    "#,
+);
