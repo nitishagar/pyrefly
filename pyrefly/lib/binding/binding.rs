@@ -131,7 +131,7 @@ assert_words!(Binding, 4);
 assert_words!(BindingExpect, 8);
 assert_words!(BindingTypeAlias, 6);
 assert_words!(BindingAnnotation, 13);
-assert_words!(BindingClass, 10);
+assert_words!(BindingClass, 11);
 assert_words!(BindingTParams, 9);
 assert_words!(BindingClassBaseType, 3);
 assert_words!(BindingClassMetadata, 14);
