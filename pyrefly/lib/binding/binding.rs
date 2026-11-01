@@ -1220,6 +1220,7 @@ pub enum ExprOrBinding {
 pub struct PrivateAttributeAccessCheck {
     pub value: Expr,
     pub attr: Identifier,
+    /// Enclosing classes, from innermost to outermost.
     pub class_idxs: Vec<Idx<KeyClass>>,
 }
 

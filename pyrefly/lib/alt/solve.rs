@@ -3481,6 +3481,7 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
             self.check_protected_attribute_access(expect, &value_type, errors);
             return;
         }
+        // Python mangles a private name using the innermost enclosing class.
         let owner = expect
             .class_idxs
             .first()

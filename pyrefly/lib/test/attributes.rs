@@ -2561,6 +2561,17 @@ class A:
 );
 
 testcase!(
+    test_private_attribute_in_lambda_and_comprehension_in_class_body,
+    r#"
+class A:
+    __secret: int = 0
+    instances: list["A"] = []
+    secrets = [a.__secret for a in instances]
+    get_secret = lambda: A.__secret
+    "#,
+);
+
+testcase!(
     test_nonexistent_private_attribute,
     r#"
 class A:
