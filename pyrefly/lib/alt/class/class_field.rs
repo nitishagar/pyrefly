@@ -1818,6 +1818,7 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
                         pydantic_unknown_validation_alias: flags.pydantic_unknown_validation_alias,
                         pydantic_unchecked_metadata: flags.pydantic_unchecked_metadata
                             || flags.init_by_alias.is_some(),
+                        pydantic_has_custom_schema: flags.pydantic_has_custom_schema,
                         ..DataclassFieldKeywords::new()
                     });
                 if metadata.is_protocol()
@@ -1887,6 +1888,7 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
                             annotation_flags.pydantic_unknown_validation_alias;
                         f.pydantic_unchecked_metadata |=
                             annotation_flags.pydantic_unchecked_metadata;
+                        f.pydantic_has_custom_schema |= annotation_flags.pydantic_has_custom_schema;
                     }
                     if flags.is_some() {
                         // A field specifier with no type annotation is a definition-time error,
