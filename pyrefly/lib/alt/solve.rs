@@ -3399,21 +3399,15 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
         }
     }
 
-    fn check_protected_attribute_access(
+    /// Whether some class in `value_type` has a protected member `attr` that code enclosed by
+    /// the classes in `owners` cannot access.
+    fn is_protected_attribute_inaccessible(
         &self,
-        expect: &PrivateAttributeAccessCheck,
+        attr: &Name,
         value_type: &Type,
-        errors: &ErrorCollector,
-    ) {
-        let Some(owners) = expect
-            .class_idxs
-            .iter()
-            .map(|class_idx| self.get_idx(*class_idx).0.clone())
-            .collect::<Option<Vec<_>>>()
-        else {
-            return;
-        };
-        let inaccessible = value_type.clone().into_unions().into_iter().any(|ty| {
+        owners: &[Class],
+    ) -> bool {
+        value_type.clone().into_unions().into_iter().any(|ty| {
             let accessed_class = match ty {
                 Type::ClassDef(cls) => Some(cls),
                 Type::ClassType(cls) | Type::SelfType(cls) => Some(cls.into_class_object()),
@@ -3427,7 +3421,7 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
                 return false;
             };
             if matches!(
-                expect.attr.id.as_str(),
+                attr.as_str(),
                 "_asdict" | "_field_defaults" | "_fields" | "_make" | "_replace"
             ) && self
                 .get_metadata_for_class(&accessed_class)
@@ -3436,8 +3430,7 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
             {
                 return false;
             }
-            let Some(member) =
-                self.get_class_member_with_defining_class(&accessed_class, &expect.attr.id)
+            let Some(member) = self.get_class_member_with_defining_class(&accessed_class, attr)
             else {
                 return false;
             };
@@ -3450,18 +3443,7 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
                             .iter()
                             .any(|ancestor| ancestor.class_object() == &member.defining_class)
                 })
-        });
-        if inaccessible && self.has_static_attr(value_type, &expect.attr.id) {
-            self.error(
-                errors,
-                expect.attr.range(),
-                ErrorKind::ProtectedAccess,
-                format!(
-                    "Protected attribute `{}` cannot be accessed outside of its defining class or a subclass",
-                    expect.attr.id
-                ),
-            );
-        }
+        })
     }
 
     fn check_private_attribute_access(
@@ -3470,52 +3452,61 @@ impl<'ctx, 'answer, Ans: LookupAnswer> AnswersSolver<'ctx, 'answer, Ans> {
         errors: &ErrorCollector,
     ) {
         let value_type = self.expr_infer(&expect.value, errors);
-        // Name mangling only occurs on attributes of classes.
+        // Only class attributes are subject to access checks.
         if self.is_subset_eq(
             &value_type,
             &self.heap.mk_class_type(self.stdlib.module_type().clone()),
         ) {
             return;
         }
-        if Ast::is_protected_attr(&expect.attr.id) {
-            self.check_protected_attribute_access(expect, &value_type, errors);
-            return;
-        }
-        // Python mangles a private name using the innermost enclosing class.
-        let owner = expect
+        let Some(owners) = expect
             .class_idxs
-            .first()
-            .and_then(|class_idx| self.get_idx(*class_idx).0.clone());
-        if !expect.class_idxs.is_empty() && owner.is_none() {
+            .iter()
+            .map(|class_idx| self.get_idx(*class_idx).0.clone())
+            .collect::<Option<Vec<_>>>()
+        else {
             return;
-        }
-        if let Some(owner) = owner.as_ref()
-            && self
-                .get_class_fields(owner)
-                .is_some_and(|f| f.contains(&expect.attr.id))
-            && self.is_subset_eq(
-                &value_type,
-                &self.union(
-                    self.heap.mk_class_def(owner.dupe()),
-                    self.instantiate(owner),
+        };
+        let (error_kind, message) = if Ast::is_protected_attr(&expect.attr.id) {
+            if !self.is_protected_attribute_inaccessible(&expect.attr.id, &value_type, &owners) {
+                return;
+            }
+            (
+                ErrorKind::ProtectedAccess,
+                format!(
+                    "Protected attribute `{}` cannot be accessed outside of its defining class or a subclass",
+                    expect.attr.id
                 ),
             )
-        {
-            return;
-        }
+        } else {
+            // Python mangles a private name using the innermost enclosing class.
+            if let Some(owner) = owners.first()
+                && self
+                    .get_class_fields(owner)
+                    .is_some_and(|f| f.contains(&expect.attr.id))
+                && self.is_subset_eq(
+                    &value_type,
+                    &self.union(
+                        self.heap.mk_class_def(owner.dupe()),
+                        self.instantiate(owner),
+                    ),
+                )
+            {
+                return;
+            }
+            (
+                ErrorKind::NoAccess,
+                format!(
+                    "Private attribute `{}` cannot be accessed outside of its defining class",
+                    expect.attr.id
+                ),
+            )
+        };
         // Dynamic fallback does not establish a class declaration to restrict access to.
         if !self.has_static_attr(&value_type, &expect.attr.id) {
             return;
         }
-        self.error(
-            errors,
-            expect.attr.range(),
-            ErrorKind::NoAccess,
-            format!(
-                "Private attribute `{}` cannot be accessed outside of its defining class",
-                expect.attr.id
-            ),
-        );
+        self.error(errors, expect.attr.range(), error_kind, message);
     }
 
     /// Populate parent methods map for find-references on reimplementations.
