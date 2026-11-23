@@ -6408,6 +6408,33 @@ bad-override = "error"
         assert_eq!(handle.module(), ModuleName::from_str("fastapi"));
     }
 
+    /// gh-5594: a file under the config root but outside every search path
+    /// (e.g. `tests/` next to an inferred `src/` import root) is named relative
+    /// to the config root, so relative imports keep working instead of
+    /// collapsing onto `__unknown__` with the leading dot dropped.
+    #[test]
+    fn test_unplaced_file_named_relative_to_config_root() {
+        let root = TempDir::new().unwrap();
+        let test_a = root.path().join("tests/sub/test_a.py");
+        fs::create_dir_all(test_a.parent().unwrap()).unwrap();
+        fs::write(&test_a, "from .helpers import X\n").unwrap();
+
+        let mut config = ConfigFile {
+            source: ConfigSource::File(root.path().join(ConfigFile::PYREFLY_FILE_NAME)),
+            import_root: Some(root.path().join("src")),
+            interpreters: Interpreters {
+                skip_interpreter_query: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        config.python_environment.set_empty_to_default();
+
+        let handle = config.handle_from_module_path(ModulePath::filesystem(test_a));
+        assert_eq!(handle.module(), ModuleName::from_str("tests.sub.test_a"));
+        assert!(handle.is_fallback());
+    }
+
     #[test]
     fn test_custom_typeshed_versions_is_watched() {
         // A custom typeshed usually lives outside every watched root, so unless its VERSIONS is
