@@ -1633,8 +1633,51 @@ impl ConfigFile {
             .dupe()
     }
 
+    /// Fallback search paths in effect for an import from `origin` (or for
+    /// deriving the module name of the file at `origin`).
+    ///
+    /// This is the configured [`FallbackSearchPath`], except that when no
+    /// fallback is configured and this config was loaded from a file on disk,
+    /// the config root acts as the fallback root. That keeps relative imports
+    /// working for project files outside the import root (e.g. `tests/` next
+    /// to an inferred `src/` root): such files are named relative to the
+    /// config root (see [`Self::handle_from_module_path`]) and their imports
+    /// resolve against the same root.
+    ///
+    /// The result is origin-independent (the config root is fixed per config),
+    /// so import resolution stays cacheable by module name alone.
+    pub fn effective_fallback_paths(&self, origin: Option<&Path>) -> Arc<Vec<PathBuf>> {
+        let configured = self
+            .fallback_search_path
+            .for_directory(origin.and_then(|p| p.parent()));
+        if !configured.is_empty() {
+            return configured;
+        }
+        if let Some(root) = self.source.root_from_file() {
+            Arc::new(vec![root.to_path_buf()])
+        } else {
+            configured
+        }
+    }
+
+    /// Fallback search paths for the pre-site-packages lookup slot: the
+    /// configured [`FallbackSearchPath::Explicit`] paths, or the config root
+    /// when no fallback is configured (mirroring [`Self::effective_fallback_paths`]
+    /// for module naming). Directory-relative fallback is a last resort searched
+    /// separately, so it yields nothing here.
+    pub fn effective_explicit_fallback_paths(&self) -> Option<Arc<Vec<PathBuf>>> {
+        match &self.fallback_search_path {
+            FallbackSearchPath::Explicit(paths) => Some(paths.dupe()),
+            FallbackSearchPath::Empty => self
+                .source
+                .root_from_file()
+                .map(|root| Arc::new(vec![root.to_path_buf()])),
+            FallbackSearchPath::DirectoryRelative(_) => None,
+        }
+    }
+
     /// Create a `Handle` for the given path, deriving its module name from the search paths,
-    /// falling back to `self.fallback_search_path` and finally `__unknown__`.
+    /// falling back to [`Self::effective_fallback_paths`] and finally `__unknown__`.
     pub fn handle_from_module_path(&self, module_path: ModulePath) -> Handle {
         let named_by = |db: &Option<ArcId<Box<dyn SourceDatabase>>>| {
             db.as_ref()
@@ -1662,7 +1705,7 @@ impl ConfigFile {
                         .map(ModuleNameWithKind::guaranteed)
                         .unwrap_or(ModuleNameWithKind::guaranteed(ModuleName::unknown()))
                 } else {
-                    let fallback_paths = self.fallback_search_path.for_directory(Some(path));
+                    let fallback_paths = self.effective_fallback_paths(Some(path));
                     ModuleName::from_path_with_fallback(
                         path,
                         search_paths,
